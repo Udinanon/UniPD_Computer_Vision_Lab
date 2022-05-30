@@ -11,29 +11,29 @@ using namespace cv;
 using namespace std;
 
 int main(int argc, char **argv){
-    // Read image from disk
+    // Get CLI inputs
     string path;
+    cout << "Path is expected to have a subfolder /checkerboard_images/ for calibration and a test_image.png for final testing" << endl;
     if (argc == 2)
     {
-        cout << "Reading input images from path: " << argv[1] << endl;
+        cout << "Recongized path: " << argv[1] << endl;
         path = argv[1];
-
     }
     else
     {
-        cout << "Expected usage: Lab6Task1 <input_path>" << endl;
-        path = "/home/udinanon/C++/Computer Vision/Lab8/Task2/data/checkerboard_images/*.png";
+        cout << "Expected usage: Lab8Task1 <input_path>" << endl;
+        path = "/home/udinanon/C++/Computer Vision/Lab8/Task2/data/";
         cout << "using default path: " << path << endl;
     }
+    //Prepare paths for images
     vector<String> filenames;
-    glob(path, filenames, false);
-
+    glob(path + "checkerboard_images/*.png", filenames, false);
+    //Prepare vectors for imagepoints, objectpoints, checkerboard size
     vector<Mat> images;
     Size grid_size = Size(5, 6);
     int CHECKERBOARD[2]{5, 6};
     std::vector<std::vector<cv::Point3f>> objpoints;
     std::vector<std::vector<cv::Point2f>> imgpoints;
-
     std::vector<cv::Point3f> objp;
     for (int i{0}; i < CHECKERBOARD[1]; i++)
     {
@@ -43,9 +43,10 @@ int main(int argc, char **argv){
         }
     }
 
-    size_t count = filenames.size(); // number of png files in images folder
-    cout << count << endl;
-    // populate the images vector
+    // number of png files in images folder
+    size_t count = filenames.size(); 
+    cout << "Total images in subfolder" << count << endl;
+    // Read images from disk and compyte the chessboard corners
     for (size_t i = 0; i < count; i++)
     {
         cout << filenames[i] << endl;
@@ -57,25 +58,20 @@ int main(int argc, char **argv){
         bool found = findChessboardCorners(grey, grid_size, corners);
         cout << found << endl;
         if (found){
-            drawChessboardCorners(grey, grid_size, corners, found);
-            //imshow("IMAGE", grey);
-            //waitKey(0);
             objpoints.push_back(objp);
             imgpoints.push_back(corners);
         }
     }
+    //Compute distortion coefficents
     Mat cameraMatrix, distCoeffs;
     vector<Mat> rvecs, tvecs;
     calibrateCamera(objpoints, imgpoints, cv::Size(images[0].rows, images[0].cols), cameraMatrix, distCoeffs, rvecs, tvecs);
     std::cout << "cameraMatrix : " << cameraMatrix << std::endl;
     std::cout << "distCoeffs : " << distCoeffs << std::endl;
-
-    // from https://amroamroamro.github.io/mexopencv/opencv/calibration_demo.html https://github.com/opencv/opencv/blob/3.2.0/samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp
-    vector<float> perViewErrors;
+    //Compute Mean Reprojection Error
     vector<Point2f> imagePoints2;
     size_t totalPoints = 0;
     double totalErr = 0, err;
-    perViewErrors.resize(objpoints.size());
     for (size_t i = 0; i < objpoints.size(); ++i)
     {
         projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, distCoeffs, imagePoints2);
@@ -83,13 +79,19 @@ int main(int argc, char **argv){
         err = norm(imgpoints[i], imagePoints2, NORM_L2);
 
         size_t n = objpoints[i].size();
-        perViewErrors[i] = (float)sqrt(err * err / n);
         totalErr += err * err;
         totalPoints += n;
     }
-
     double mean_reproj_error = sqrt(totalErr / totalPoints);
-    cout << mean_reproj_error << endl;
-    Mat undistMap, undistMap2;
-    initUndistortRectifyMap(cameraMatrix, distCoeffs, rvecs, cameraMatrix, Size(images[0].cols, images[0].rows), CV_32FC1, undistMap, undistMap2);
+    cout << "Mean Reprojection Error " << mean_reproj_error << endl;
+    // Undistort test image and show both
+    Mat undistImg;
+    Mat distImage = imread(path + "test_image.png");
+    namedWindow("Distorted");
+    imshow("Distorted", distImage);
+    undistort(distImage, undistImg, cameraMatrix, distCoeffs);
+    namedWindow("Corrected");
+    imshow("Corrected", undistImg);
+    waitKey(0);
+    return 0;
 }
